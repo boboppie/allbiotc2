@@ -14,6 +14,7 @@ import argparse
 import csv
 import os.path
 import sys
+import datetime
 
 
 def main(tsvfile, vcffile):
@@ -82,8 +83,22 @@ _tsv_fields = ('Chr1', 'Pos1', 'Orientation1',
 # 'num_Reads_lib': '/home/allbio/ERR031544.sort.bam|38',
 # 'ERR031544.sort.bam': 'NA'
 
-_vcf_fields = ('CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO')
 
+
+_vcf_fields = ('CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'default')
+
+TS_NOW = datetime.datetime.now()
+
+VCF_HEADER = """##fileformat=VCFv4.1
+##fileDate={filedate}
+##source=breakdancer-max
+##INFO=<ID=NS,Number=1,Type=Integer,Description="Number of Samples With Data">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
+##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Length of variation">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">""".format( filedate=TS_NOW.strftime( "%Y%m%d" ) )
 
 def _format_vcffile(dictreader, vcffile):
     '''
@@ -92,24 +107,33 @@ def _format_vcffile(dictreader, vcffile):
     :type dictreader: csv.DictRedaer
     :param vcffile: output file.vcf filename
     :type vcffile: string
-    
-    TODO header missing
     '''
+    FORMAT = "GT:DP"
     with open(vcffile, mode='w') as writer:
-        writer.write('#{}\n'.format('\t'.join(_vcf_fields)))
+        writer.write('{header}\n#{columns}\n'.format(header=VCF_HEADER, columns='\t'.join(_vcf_fields)))
         output_vcf = []
         for line in dictreader:
             CHROM = line['Chr1']
             # TODO Figure out whether we have zero or one based positioning
             POS = int(line['Pos1'])
+            ALT = '.'
             SVEND = int(line['Pos2'])
-            INFO = 'PROGRAM=breakdancer;SVTYPE={};SVLEN={}'.format(line['Type'],
-                                                                   0 - int(line['Size']))
-            if line['Type'] not in ['CTX']:
-                INFO += ";SVEND={}".format(SVEND)
 
+            INFO = 'PROGRAM=breakdancer;SVTYPE={}'.format(line['Type'])
+
+            if line['Type'] not in ['CTX']:
+                INFO += ';SVLEN={}'.format(int(line['Size']))
+                INFO += ";SVEND={}".format(SVEND)
+            
+            # write alternate ALT field for Intrachromosomal translocations
+            if line['Type'] in ['CTX']:
+                ALT = "N[{}:{}[".format(line['Chr2'], line['Pos2'])
+
+
+
+            SAMPLEINFO = "{}:{}".format( '1/.', line['num_Reads'] )
             # Create record
-            output_vcf.append([CHROM, POS, '.', '.', '.', '.', 'PASS', INFO])
+            output_vcf.append([CHROM, POS, '.', '.', ALT, '.', 'PASS', INFO, FORMAT, SAMPLEINFO])
 
         # Sort all results
         output_vcf.sort()
