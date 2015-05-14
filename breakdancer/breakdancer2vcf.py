@@ -92,6 +92,8 @@ def _format_vcffile(dictreader, vcffile):
     :type dictreader: csv.DictRedaer
     :param vcffile: output file.vcf filename
     :type vcffile: string
+    
+    TODO header missing
     '''
     with open(vcffile, mode='w') as writer:
         writer.write('#{}\n'.format('\t'.join(_vcf_fields)))
